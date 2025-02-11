@@ -13,6 +13,16 @@ pub struct Matrix {
 }
 
 impl Matrix {
+    /// Create from a vector.
+    pub fn from_vec(m: usize, n: usize, data: Vec<f64>) -> Matrix {
+        assert_eq!(m * n, data.len());
+        Matrix {
+            m,
+            n,
+            data,
+        }
+    }
+
     /// Return a zeroed matrix.
     pub fn zero(m: usize, n: usize) -> Matrix {
         Matrix {
@@ -32,6 +42,12 @@ impl Matrix {
         }
     }
 
+    /// Return the internal vector data.
+    pub fn to_vec(self) -> Vec<f64> {
+        self.data
+    }
+
+    /// Return a matrix view.
     pub fn view(&self) -> MatrixView {
         let view_data = (0..self.m)
             .map(|i| &self.data[i * self.n..i * self.n + self.n])
@@ -43,6 +59,7 @@ impl Matrix {
         }
     }
 
+    /// Return a mutable matrix view.
     pub fn view_mut(&mut self) -> MatrixViewMut {
         let mut view_data = vec![];
 
@@ -164,18 +181,6 @@ impl<'a> MatrixIndex for MatrixViewMut<'a> {
     }
 }
 
-/// Matrix-vector multiply (u = A * v).
-pub fn matvecmul(a: &Matrix, v: &[f64], u: &mut [f64]) {
-    assert_eq!(a.n, v.len());
-    assert_eq!(a.m, u.len());
-    for i in 0..a.m {
-        u[i] = 0.0;
-        for j in 0..a.n {
-            u[i] += a.get(i, j) * v[j];
-        }
-    }
-}
-
 pub fn matmul(a: &MatrixView, b: &MatrixView, c: &mut MatrixViewMut) {
     assert_eq!(a.m, c.m);
     assert_eq!(a.n, b.m);
@@ -197,5 +202,51 @@ pub fn matmul(a: &MatrixView, b: &MatrixView, c: &mut MatrixViewMut) {
                 }
             }
         }
+    }
+}
+
+const EPSILON: f64 = 10e-8;
+
+/// Return whether a is approximately equal to b.
+pub fn approx(a: f64, b: f64) -> bool {
+    (a-b).abs() < EPSILON
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn matmul_times_zero() {
+        let m = 10;
+        let n = 4;
+        let p = 8;
+        let x = Matrix::zero(m, n);
+        let y = Matrix::rand(n, p);
+        let mut z = Matrix::zero(m, p);
+
+        matmul(&x.view(), &y.view(), &mut z.view_mut());
+
+        for i in 0..m {
+            for j in 0..p {
+                assert!(approx(z.get(i, j), 0.0));
+            }
+        }
+    }
+
+    #[test]
+    fn matmul_simple() {
+        let x = Matrix::from_vec(3, 2, vec![1.0, 2.0,
+                                            3.0, 4.0,
+                                            5.0, 6.0]);
+        let y = Matrix::from_vec(2, 2, vec![1.0, 2.0,
+                                            0.0, 8.0]);
+        let mut z = Matrix::zero(3, 2);
+
+        matmul(&x.view(), &y.view(), &mut z.view_mut());
+
+        let z = z.to_vec();
+        let expected = vec![1.0, 18.0, 3.0, 38.0, 5.0, 58.0];
+        assert!(z.iter().zip(&expected).all(|(a, b)| approx(*a, *b)));
     }
 }
